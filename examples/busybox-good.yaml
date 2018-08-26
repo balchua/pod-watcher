@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox-good
+  namespace: test
+spec:
+  containers:
+  - image: busybox
+    command: ["/bin/sh", "-c"]
+    args: ["sleep 20s ; exit 0"]
+    imagePullPolicy: IfNotPresent
+    name: busybox
+  restartPolicy: Never
