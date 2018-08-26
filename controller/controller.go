@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"pod-watcher/handler"
 	"syscall"
 	"time"
 
@@ -22,18 +23,17 @@ import (
 
 const maxRetries = 5
 
-var serverStartTime time.Time
-
 // Controller object
 type Controller struct {
 	clientset kubernetes.Interface
 	queue     workqueue.RateLimitingInterface
 	informer  cache.SharedIndexInformer
+	handler   handler.MailHandler
 }
 
 /*
 Start function starts setting up the informer.
-
+This method also find pods with label appType=installer
 */
 func Start(kubeClient *kubernetes.Clientset, namespace string) {
 
@@ -68,6 +68,7 @@ func Start(kubeClient *kubernetes.Clientset, namespace string) {
 	<-sigterm
 }
 
+// Only act on when Pod is updated.
 func newResourceController(client kubernetes.Interface, informer cache.SharedIndexInformer) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
@@ -75,7 +76,6 @@ func newResourceController(client kubernetes.Interface, informer cache.SharedInd
 
 		UpdateFunc: func(old, new interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(old)
-			logrus.Info("Update pod")
 			if err == nil {
 				logrus.Info("Adding to Queue")
 				queue.Add(key)
@@ -87,6 +87,11 @@ func newResourceController(client kubernetes.Interface, informer cache.SharedInd
 		clientset: client,
 		informer:  informer,
 		queue:     queue,
+		handler: handler.MailHandler{
+			Subject: "Down",
+			From:    "uglyjoe@email.io",
+			To:      "badboy@email.io",
+		},
 	}
 }
 
@@ -96,7 +101,6 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
 	logrus.Info("Starting pod-watcher controller")
-	serverStartTime = time.Now().Local()
 
 	go c.informer.Run(stopCh)
 
@@ -104,6 +108,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		utilruntime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
 		return
 	}
+
 	logrus.Info("pod-watcher controller synced and ready")
 
 	wait.Until(c.runWorker, time.Second, stopCh)
@@ -131,6 +136,7 @@ func (c *Controller) processNextItem() bool {
 	if quit {
 		return false
 	}
+
 	defer c.queue.Done(key)
 	err := c.processItem(key.(string))
 
@@ -157,8 +163,8 @@ func (c *Controller) processItem(key string) error {
 	if obj != nil {
 		pod := obj.(*api_v1.Pod)
 		logrus.Infof("Processing the pod %s with status %s", pod.ObjectMeta.Name, pod.Status.Phase)
-		if pod.Status.Phase == api_v1.PodPending {
-			logrus.Info("its pending")
+		if pod.Status.Phase == api_v1.PodFailed {
+			c.handler.Notify(pod)
 		}
 	}
 
