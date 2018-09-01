@@ -162,8 +162,10 @@ func (c *Controller) processItem(key string) error {
 		if pod.Status.Phase == api_v1.PodFailed ||
 			pod.Status.Phase == api_v1.PodSucceeded {
 
-			subject := fmt.Sprintf("Pod (%s) status is %s", pod.ObjectMeta.Name, pod.Status.Phase)
-			body := fmt.Sprintf("Pod (%s) status is %s", pod.ObjectMeta.Name, pod.Status.Phase)
+			subject := fmt.Sprintf("Pod (%s) on namespace (%s) status is %s", pod.ObjectMeta.Name,
+				pod.ObjectMeta.Namespace, pod.Status.Phase)
+				
+			body := fmt.Sprintf("Pod (%s) status is %s due to %s", pod.ObjectMeta.Name, pod.Status.Phase, pod.Status.Reason)
 			message := handler.NewMail(c.config.Mail.From, c.config.Mail.To, subject, body)
 			c.handler.Notify(message)
 		}

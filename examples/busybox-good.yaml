@@ -6,6 +6,7 @@ metadata:
   labels:
     appType: installer
 spec:
+  activeDeadlineSeconds: 60
   containers:
   - image: busybox
     command: ["/bin/sh", "-c"]
