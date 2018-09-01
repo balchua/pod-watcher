@@ -2,10 +2,12 @@ apiVersion: skaffold/v1alpha2
 kind: Config
 build:
   artifacts:
-  - imageName: boink
+  - imageName: pod-watcher
 deploy:
   kubectl:
     manifests:
       - manifest/rbac.yaml
-      - manifest/nginx-cron-starter.yaml
-      - manifest/nginx-cron-stopper.yaml
+      - manifest/deployment.yaml
+      - examples/busybox-good.yaml
+      - manifest/mailhog.yaml
+      - examples/busybox-bad.yaml

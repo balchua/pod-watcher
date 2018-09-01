@@ -1,0 +1,37 @@
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: pod-watcher
+  namespace: test
+  labels:
+    run: pod-watcher
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      run: pod-watcher
+  template:
+    metadata:
+      labels:
+        run: pod-watcher
+    spec:
+      serviceAccountName: pod-watcher
+      containers:
+      - name: pod-watcher
+        image: pod-watcher
+        command: ["/pod-watcher"]
+        args: ["--namespace","test", "--label", "appType=installer"]
+  
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            memory: 64M
+            cpu: 100m
+          requests:
+            memory: 64M
+            cpu: 100m
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst

@@ -1,0 +1,7 @@
+mail:
+  from: badboy@somwhere.io
+  to: team@somewhere.io
+
+smtp:
+  host: 192.168.99.100
+  port: 30021

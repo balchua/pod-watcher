@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"pod-watcher/config"
 	"pod-watcher/handler"
 	"syscall"
 	"time"
@@ -29,18 +30,14 @@ type Controller struct {
 	queue     workqueue.RateLimitingInterface
 	informer  cache.SharedIndexInformer
 	handler   handler.MailHandler
+	config    config.Configuration
 }
 
 /*
 Start function starts setting up the informer.
 This method also find pods with label appType=installer
 */
-func Start(kubeClient *kubernetes.Clientset, namespace string) {
-
-	listOptions := meta_v1.ListOptions{
-		LabelSelector: "appType=installer",
-		Limit:         100,
-	}
+func Start(kubeClient *kubernetes.Clientset, namespace string, listOptions meta_v1.ListOptions, config config.Configuration) {
 
 	informer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
@@ -56,7 +53,7 @@ func Start(kubeClient *kubernetes.Clientset, namespace string) {
 		cache.Indexers{},
 	)
 
-	c := newResourceController(kubeClient, informer)
+	c := newResourceController(kubeClient, informer, config)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
@@ -69,7 +66,7 @@ func Start(kubeClient *kubernetes.Clientset, namespace string) {
 }
 
 // Only act on when Pod is updated.
-func newResourceController(client kubernetes.Interface, informer cache.SharedIndexInformer) *Controller {
+func newResourceController(client kubernetes.Interface, informer cache.SharedIndexInformer, config config.Configuration) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -83,15 +80,14 @@ func newResourceController(client kubernetes.Interface, informer cache.SharedInd
 		},
 	})
 
+	handler := handler.NewMailHandler(config.SMTP.Host, config.SMTP.Port, "", "")
+
 	return &Controller{
 		clientset: client,
 		informer:  informer,
 		queue:     queue,
-		handler: handler.MailHandler{
-			Subject: "Down",
-			From:    "uglyjoe@email.io",
-			To:      "badboy@email.io",
-		},
+		handler:   handler,
+		config:    config,
 	}
 }
 
@@ -163,8 +159,13 @@ func (c *Controller) processItem(key string) error {
 	if obj != nil {
 		pod := obj.(*api_v1.Pod)
 		logrus.Infof("Processing the pod %s with status %s", pod.ObjectMeta.Name, pod.Status.Phase)
-		if pod.Status.Phase == api_v1.PodFailed {
-			c.handler.Notify(pod)
+		if pod.Status.Phase == api_v1.PodFailed ||
+			pod.Status.Phase == api_v1.PodSucceeded {
+
+			subject := fmt.Sprintf("Pod (%s) status is %s", pod.ObjectMeta.Name, pod.Status.Phase)
+			body := fmt.Sprintf("Pod (%s) status is %s", pod.ObjectMeta.Name, pod.Status.Phase)
+			message := handler.NewMail(c.config.Mail.From, c.config.Mail.To, subject, body)
+			c.handler.Notify(message)
 		}
 	}
 

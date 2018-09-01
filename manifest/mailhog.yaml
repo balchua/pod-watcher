@@ -1,0 +1,65 @@
+---
+# Source: mailhog/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailhog
+  namespace: test
+  labels:
+    app: mailhog
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      nodePort: 30020
+      protocol: TCP
+      port: 8025
+    - name: smtp
+      nodePort: 30021
+      protocol: TCP
+      port: 1025
+  selector:
+    app: mailhog
+
+---
+# Source: mailhog/templates/deployment.yaml
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: mailhog
+  namespace: test
+  labels:
+    app: mailhog
+
+spec:
+  template:
+    metadata:
+      labels:
+        app: mailhog
+    spec:
+      containers:
+        - name: mailhog
+          image: "mailhog/mailhog:v1.0.0"
+          imagePullPolicy: "IfNotPresent"
+          env:
+            - name: MH_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          ports:
+            - name: http
+              containerPort: 8025
+              protocol: TCP
+            - name: smtp
+              containerPort: 1025
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: smtp
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
+          readinessProbe:
+            tcpSocket:
+              port: smtp
+          resources:
+            {}

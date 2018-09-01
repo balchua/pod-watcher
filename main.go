@@ -1,15 +1,19 @@
 package main
 
 import (
+	"log"
 	"os"
 
+	"pod-watcher/config"
+	"pod-watcher/controller"
+
 	"github.com/Sirupsen/logrus"
+	"github.com/spf13/viper"
 	"github.com/urfave/cli"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"pod-watcher/controller"
 )
 
 var clientset *kubernetes.Clientset
@@ -61,13 +65,25 @@ func main() {
 
 	app.Action = func(c *cli.Context) error {
 		var err error
+		var listOptions metav1.ListOptions
+
 		clientset, err = getClient()
 		if err != nil {
 			logrus.Error(err)
 			return err
 		}
 
-		controller.Start(clientset, "test")
+		if selectors != "" {
+			listOptions = metav1.ListOptions{
+				LabelSelector: selectors,
+				Limit:         100,
+			}
+
+		} else {
+			listOptions = metav1.ListOptions{}
+		}
+
+		controller.Start(clientset, namespace, listOptions, getConfig())
 
 		if err != nil {
 			panic(err)
@@ -92,4 +108,21 @@ func getClient() (*kubernetes.Clientset, error) {
 		return nil, err
 	}
 	return kubernetes.NewForConfig(config)
+}
+
+func getConfig() config.Configuration {
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+	var configuration config.Configuration
+
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalf("Error reading config file, %s", err)
+	}
+	err := viper.Unmarshal(&configuration)
+	if err != nil {
+		log.Fatalf("unable to decode into struct, %v", err)
+	}
+	logrus.Infof("SMTP host is %s", configuration.SMTP.Host)
+	logrus.Infof("Mail configuration From: %s", configuration.Mail.From)
+	return configuration
 }
